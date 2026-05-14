@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>World Clock</title>
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: #0d1117;
+      color: #e6edf3;
+      font-family: 'Courier New', Courier, monospace;
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    header h1 {
+      font-size: 2rem;
+      letter-spacing: 0.15em;
+      color: #58a6ff;
+      text-transform: uppercase;
+    }
+
+    header p {
+      margin-top: 0.4rem;
+      font-size: 0.85rem;
+      color: #8b949e;
+      letter-spacing: 0.08em;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 1.25rem;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .card {
+      background-color: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 10px;
+      padding: 1.25rem 1.5rem;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .card:hover {
+      border-color: #58a6ff;
+      box-shadow: 0 0 0 1px #58a6ff33;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: baseline;
+      gap: 0.6rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .tz-abbr {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #58a6ff;
+      letter-spacing: 0.1em;
+    }
+
+    .tz-offset {
+      font-size: 0.75rem;
+      color: #8b949e;
+    }
+
+    .time {
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      color: #e6edf3;
+      line-height: 1;
+      margin-bottom: 0.4rem;
+    }
+
+    .date {
+      font-size: 0.78rem;
+      color: #8b949e;
+      letter-spacing: 0.04em;
+    }
+
+    .tz-name {
+      font-size: 0.72rem;
+      color: #484f58;
+      margin-top: 0.5rem;
+      letter-spacing: 0.03em;
+    }
+
+    #status {
+      text-align: center;
+      margin-top: 2rem;
+      font-size: 0.75rem;
+      color: #484f58;
+      letter-spacing: 0.06em;
+    }
+
+    #status.error {
+      color: #f85149;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>&#128336; World Clock</h1>
+    <p>Live times across all configured timezones &mdash; updated every second</p>
+  </header>
+
+  <div class="grid" id="clock-grid">
+    {% for abbr in timezones %}
+    <div class="card" id="card-{{ abbr }}">
+      <div class="card-header">
+        <span class="tz-abbr">{{ abbr }}</span>
+        <span class="tz-offset" id="offset-{{ abbr }}"></span>
+      </div>
+      <div class="time" id="time-{{ abbr }}">--:--:--</div>
+      <div class="date" id="date-{{ abbr }}">Loading&hellip;</div>
+      <div class="tz-name" id="tzname-{{ abbr }}">{{ timezones[abbr] }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <p id="status">Connecting&hellip;</p>
+
+  <script>
+    const statusEl = document.getElementById('status');
+
+    function formatOffset(raw) {
+      // raw is e.g. "+0530" or "-0500"
+      if (!raw || raw.length < 5) return raw;
+      const sign = raw[0];
+      const hh   = raw.slice(1, 3);
+      const mm   = raw.slice(3, 5);
+      return `UTC${sign}${hh}:${mm}`;
+    }
+
+    async function fetchAndUpdate() {
+      try {
+        const response = await fetch('/api/time');
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+
+        for (const [abbr, info] of Object.entries(data)) {
+          const timeEl   = document.getElementById(`time-${abbr}`);
+          const dateEl   = document.getElementById(`date-${abbr}`);
+          const offsetEl = document.getElementById(`offset-${abbr}`);
+
+          if (timeEl)   timeEl.textContent   = info.time;
+          if (dateEl)   dateEl.textContent   = info.date;
+          if (offsetEl) offsetEl.textContent = formatOffset(info.offset);
+        }
+
+        statusEl.textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+        statusEl.className = '';
+      } catch (err) {
+        statusEl.textContent = `Error fetching time data: ${err.message}`;
+        statusEl.className = 'error';
+      }
+    }
+
+    // Fetch immediately, then every second
+    fetchAndUpdate();
+    setInterval(fetchAndUpdate, 1000);
+  </script>
+
+</body>
+</html>
