@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}Sunbiz Automation{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a href="/" class="logo">
+        <span class="logo-icon">🏛️</span>
+        <span class="logo-text">Sunbiz Automation</span>
+      </a>
+      <nav class="site-nav">
+        <a href="/">Dashboard</a>
+        <a href="/status">Check Status</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="site-main">
+    <div class="container">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>Florida Division of Corporations — Automated Filing Assistant</p>
+      <p class="footer-disclaimer">
+        This tool automates filings on the official
+        <a href="https://dos.fl.gov/sunbiz/" target="_blank" rel="noopener">Sunbiz portal</a>.
+        Always verify your filing at
+        <a href="https://search.sunbiz.org" target="_blank" rel="noopener">search.sunbiz.org</a>.
+      </p>
+    </div>
+  </footer>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>
