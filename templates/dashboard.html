@@ -1,0 +1,279 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard — Sunbiz Automation{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Business Registration Filing</h1>
+  <p class="subtitle">Search name availability and file with the Florida Division of Corporations.</p>
+</div>
+
+<!-- ── Step 1: Name Search ─────────────────────────────────────────────── -->
+<section class="card" id="section-search">
+  <h2>Step 1 — Check Name Availability</h2>
+
+  <div class="form-row">
+    <div class="form-group flex-grow">
+      <label for="business_name">Business Name <span class="required">*</span></label>
+      <input type="text" id="business_name" name="business_name"
+             placeholder="e.g. Acme Consulting" autocomplete="off" />
+    </div>
+    <div class="form-group">
+      <label for="business_type">Entity Type <span class="required">*</span></label>
+      <select id="business_type" name="business_type">
+        <option value="LLC">LLC</option>
+        <option value="Corp">Corporation</option>
+        <option value="Fictitious">Fictitious Name</option>
+      </select>
+    </div>
+  </div>
+
+  <button class="btn btn-secondary" id="btn-search" type="button">
+    🔍 Search Availability
+  </button>
+
+  <div id="search-result" class="result-box hidden"></div>
+</section>
+
+<!-- ── Step 2: Filing Form ─────────────────────────────────────────────── -->
+<section class="card" id="section-file">
+  <h2>Step 2 — File Registration</h2>
+  <p class="hint">Complete all fields below, then click <strong>File Now</strong>.</p>
+
+  <form id="filing-form" novalidate>
+
+    <!-- Addresses -->
+    <fieldset>
+      <legend>Addresses</legend>
+      <div class="form-group">
+        <label for="business_address">Business / Principal Address <span class="required">*</span></label>
+        <input type="text" id="business_address" name="business_address"
+               placeholder="123 Main St, Miami, FL 33101" />
+      </div>
+      <div class="form-group">
+        <label for="mailing_address">Mailing Address <span class="optional">(optional — defaults to business address)</span></label>
+        <input type="text" id="mailing_address" name="mailing_address"
+               placeholder="PO Box 1, Miami, FL 33101" />
+      </div>
+    </fieldset>
+
+    <!-- Contact -->
+    <fieldset>
+      <legend>Contact</legend>
+      <div class="form-group">
+        <label for="contact_email">Contact Email <span class="required">*</span></label>
+        <input type="email" id="contact_email" name="contact_email"
+               placeholder="owner@example.com" />
+      </div>
+    </fieldset>
+
+    <!-- Signer -->
+    <fieldset>
+      <legend>Signer / Organizer</legend>
+      <div class="form-row">
+        <div class="form-group flex-grow">
+          <label for="signer_name">Full Name <span class="required">*</span></label>
+          <input type="text" id="signer_name" name="signer_name"
+                 placeholder="Jane Doe" />
+        </div>
+        <div class="form-group">
+          <label for="signer_title">Title <span class="required">*</span></label>
+          <select id="signer_title" name="signer_title">
+            <optgroup label="LLC">
+              <option value="MGR">MGR — Manager</option>
+              <option value="AMBR">AMBR — Authorized Member</option>
+            </optgroup>
+            <optgroup label="Corporation">
+              <option value="PRESIDENT">President</option>
+              <option value="SECRETARY">Secretary</option>
+              <option value="VICE PRESIDENT">Vice President</option>
+              <option value="TREASURER">Treasurer</option>
+            </optgroup>
+          </select>
+        </div>
+      </div>
+    </fieldset>
+
+    <!-- Registered Agent -->
+    <fieldset>
+      <legend>Registered Agent</legend>
+      <div class="form-group">
+        <label for="registered_agent">
+          Registered Agent Name
+          <span class="optional">(optional — defaults to signer name)</span>
+        </label>
+        <input type="text" id="registered_agent" name="registered_agent"
+               placeholder="Jane Doe" />
+      </div>
+    </fieldset>
+
+    <div class="form-actions">
+      <button class="btn btn-primary" id="btn-file" type="submit" disabled>
+        📋 File Now
+      </button>
+      <span class="form-hint" id="file-hint">Search for a name first to enable filing.</span>
+    </div>
+
+  </form>
+
+  <div id="filing-result" class="result-box hidden"></div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* ── Helpers ─────────────────────────────────────────────────────────── */
+const $ = id => document.getElementById(id);
+const show = el => el.classList.remove('hidden');
+const hide = el => el.classList.add('hidden');
+
+function setResult(el, { ok, html }) {
+  el.className = 'result-box ' + (ok ? 'result-ok' : 'result-error');
+  el.innerHTML = html;
+  show(el);
+}
+
+function setLoading(btn, loading) {
+  btn.disabled = loading;
+  btn.dataset.originalText = btn.dataset.originalText || btn.innerHTML;
+  btn.innerHTML = loading ? '⏳ Please wait…' : btn.dataset.originalText;
+}
+
+/* ── Search ──────────────────────────────────────────────────────────── */
+$('btn-search').addEventListener('click', async () => {
+  const name = $('business_name').value.trim();
+  const type = $('business_type').value;
+  const resultEl = $('search-result');
+  const btn = $('btn-search');
+
+  if (!name) {
+    setResult(resultEl, { ok: false, html: '⚠️ Please enter a business name.' });
+    return;
+  }
+
+  setLoading(btn, true);
+  hide(resultEl);
+
+  try {
+    const resp = await fetch('/api/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ business_name: name, business_type: type }),
+    });
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      setResult(resultEl, { ok: false, html: `❌ Error: ${data.error || 'Unknown error'}` });
+      return;
+    }
+
+    const icon = data.available ? '✅' : '❌';
+    let html = `<p><strong>${icon} ${data.message}</strong></p>`;
+
+    if (data.matches && data.matches.length > 0) {
+      html += `<details><summary>View ${data.matches.length} similar name(s)</summary><ul>`;
+      data.matches.forEach(m => {
+        html += `<li><strong>${m.name}</strong> — ${m.status} ${m.type ? '(' + m.type + ')' : ''}</li>`;
+      });
+      html += '</ul></details>';
+    }
+
+    setResult(resultEl, { ok: data.available, html });
+
+    // Enable filing only if name is available
+    const fileBtn = $('btn-file');
+    fileBtn.disabled = !data.available;
+    $('file-hint').textContent = data.available
+      ? 'Name is available — fill in the details below and click File Now.'
+      : 'This name is taken. Search for a different name.';
+
+  } catch (err) {
+    setResult(resultEl, { ok: false, html: `❌ Network error: ${err.message}` });
+  } finally {
+    setLoading(btn, false);
+  }
+});
+
+/* ── File ────────────────────────────────────────────────────────────── */
+$('filing-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const resultEl = $('filing-result');
+  const btn = $('btn-file');
+
+  const payload = {
+    business_name:    $('business_name').value.trim(),
+    business_type:    $('business_type').value,
+    business_address: $('business_address').value.trim(),
+    mailing_address:  $('mailing_address').value.trim(),
+    contact_email:    $('contact_email').value.trim(),
+    signer: {
+      name:  $('signer_name').value.trim(),
+      title: $('signer_title').value,
+    },
+    registered_agent: $('registered_agent').value.trim(),
+  };
+
+  // Client-side validation
+  const required = ['business_name', 'business_address', 'contact_email'];
+  const missing = required.filter(k => !payload[k]);
+  if (!payload.signer.name) missing.push('signer_name');
+  if (missing.length) {
+    setResult(resultEl, { ok: false, html: `⚠️ Missing required fields: ${missing.join(', ')}` });
+    return;
+  }
+
+  setLoading(btn, true);
+  hide(resultEl);
+
+  try {
+    const resp = await fetch('/api/file', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await resp.json();
+
+    if (data.success) {
+      const filingId = data.filing_id || 'N/A';
+      setResult(resultEl, {
+        ok: true,
+        html: `
+          <p>✅ <strong>${data.message}</strong></p>
+          <p>Filing ID: <code>${filingId}</code></p>
+          <p><a href="/status?filing_id=${encodeURIComponent(filingId)}">Check filing status →</a></p>
+          ${data.detail ? '<details><summary>Portal response</summary><pre>' + escHtml(data.detail) + '</pre></details>' : ''}
+        `,
+      });
+    } else {
+      setResult(resultEl, {
+        ok: false,
+        html: `<p>❌ <strong>${data.message || data.error}</strong></p>
+               ${data.detail ? '<pre>' + escHtml(data.detail) + '</pre>' : ''}`,
+      });
+    }
+  } catch (err) {
+    setResult(resultEl, { ok: false, html: `❌ Network error: ${err.message}` });
+  } finally {
+    setLoading(btn, false);
+  }
+});
+
+/* ── Signer title options based on entity type ───────────────────────── */
+$('business_type').addEventListener('change', () => {
+  const type = $('business_type').value;
+  const titleSel = $('signer_title');
+  // Show/hide optgroups
+  [...titleSel.querySelectorAll('optgroup')].forEach(og => {
+    const isLLC = og.label === 'LLC';
+    og.disabled = (type === 'Corp' && isLLC) || (type === 'LLC' && !isLLC);
+  });
+  // Select first enabled option
+  const firstEnabled = [...titleSel.options].find(o => !o.disabled && !o.parentElement.disabled);
+  if (firstEnabled) titleSel.value = firstEnabled.value;
+});
+
+function escHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+{% endblock %}

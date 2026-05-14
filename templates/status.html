@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block title %}Filing Status — Sunbiz Automation{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Filing Status</h1>
+  <p class="subtitle">Look up the current status of a submitted filing.</p>
+</div>
+
+<section class="card">
+  <div class="form-row">
+    <div class="form-group flex-grow">
+      <label for="filing_id_input">Filing ID</label>
+      <input type="text" id="filing_id_input" name="filing_id"
+             value="{{ filing_id | e }}"
+             placeholder="e.g. L24000012345" />
+    </div>
+    <div class="form-group align-end">
+      <button class="btn btn-secondary" id="btn-check" type="button">
+        🔎 Check Status
+      </button>
+    </div>
+  </div>
+
+  <div id="status-result" class="result-box hidden"></div>
+</section>
+
+<div class="back-link">
+  <a href="/">← Back to Dashboard</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const $ = id => document.getElementById(id);
+const show = el => el.classList.remove('hidden');
+
+function setResult(el, { ok, html }) {
+  el.className = 'result-box ' + (ok ? 'result-ok' : 'result-error');
+  el.innerHTML = html;
+  show(el);
+}
+
+function setLoading(btn, loading) {
+  btn.disabled = loading;
+  btn.dataset.orig = btn.dataset.orig || btn.innerHTML;
+  btn.innerHTML = loading ? '⏳ Checking…' : btn.dataset.orig;
+}
+
+async function checkStatus() {
+  const filingId = $('filing_id_input').value.trim();
+  const resultEl = $('status-result');
+  const btn = $('btn-check');
+
+  if (!filingId) {
+    setResult(resultEl, { ok: false, html: '⚠️ Please enter a Filing ID.' });
+    return;
+  }
+
+  setLoading(btn, true);
+
+  try {
+    const resp = await fetch(`/api/status/${encodeURIComponent(filingId)}`);
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      setResult(resultEl, { ok: false, html: `❌ ${data.error || 'Unknown error'}` });
+      return;
+    }
+
+    const statusIcons = {
+      approved: '✅',
+      pending:  '⏳',
+      rejected: '❌',
+      unknown:  '❓',
+    };
+    const icon = statusIcons[data.status] || '❓';
+    const ok = data.status === 'approved';
+
+    setResult(resultEl, {
+      ok,
+      html: `
+        <p>${icon} <strong>Status: ${data.status.toUpperCase()}</strong></p>
+        <p>Filing ID: <code>${data.filing_id}</code></p>
+        ${data.detail ? '<p>' + escHtml(data.detail) + '</p>' : ''}
+      `,
+    });
+  } catch (err) {
+    setResult(resultEl, { ok: false, html: `❌ Network error: ${err.message}` });
+  } finally {
+    setLoading(btn, false);
+  }
+}
+
+$('btn-check').addEventListener('click', checkStatus);
+
+// Auto-check if filing_id was pre-populated from query string
+window.addEventListener('DOMContentLoaded', () => {
+  if ($('filing_id_input').value.trim()) {
+    checkStatus();
+  }
+});
+
+function escHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+{% endblock %}
